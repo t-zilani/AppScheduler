@@ -43,19 +43,13 @@ class MainActivity : AppCompatActivity() {
         val adapter = AppListAdapter(
             context = this,
             items = appItems,
-            onScheduleSaved = { item, hour, minute ->
-                // persist to DB and schedule AlarmManager
-                // e.g. viewModel.saveSchedule(item.packageName, epochMs)
-                //Toast.makeText(this, "Scheduled ${item.appName} at ${Date(epochMs)}", Toast.LENGTH_SHORT).show()
-                Toast.makeText(this, "Scheduled ${item.appName} at $hour:$minute", Toast.LENGTH_SHORT).show()
-                //val hourMinPair = UIUtils.convertMillisToHoursAndMinutes(epochMs)
-                APLog.d(TAG, "check: package: ${item.appName}, time: $hour:$minute")
-                onScheduleButtonClick(item.packageName, hour, minute)
+            onScheduleSaved = { item, epochMs ->
+                 Toast.makeText(this, "Scheduled ${item.appName} at ${Date(epochMs)}", Toast.LENGTH_SHORT).show()
+                APLog.d(TAG, "check: package: ${item.appName}, time: $${Date(epochMs)}")
+                onScheduleButtonClick(item.packageName, epochMs)
             },
             onScheduleRemoved = { item ->
-                // cancel scheduled alarm and update DB
-                // e.g. viewModel.removeSchedule(item.packageName)
-                Toast.makeText(this, "Removed schedule for ${item.appName}", Toast.LENGTH_SHORT).show()
+                  Toast.makeText(this, "Removed schedule for ${item.appName}", Toast.LENGTH_SHORT).show()
             }
         )
         binding.recyclerView.adapter = adapter
@@ -69,11 +63,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun onScheduleButtonClick(selectedAppPackageName: String, hour: Int, minute: Int) {
+    private fun onScheduleButtonClick(selectedAppPackageName: String, epochMs: Long) {
         // Check if permission is granted first
         if (viewModel.canScheduleExactAlarms()) {
-            viewModel.scheduleAppLaunch(selectedAppPackageName, hour, minute)
-            Toast.makeText(this, "Scheduled $selectedAppPackageName for $hour:$minute", Toast.LENGTH_SHORT).show()
+            viewModel.scheduleAppLaunch(selectedAppPackageName, epochMs)
+            Toast.makeText(this, "Scheduled $selectedAppPackageName for ${Date(epochMs)}", Toast.LENGTH_SHORT).show()
         } else {
             // Request the permission if not already granted
             requestExactAlarmPermission()

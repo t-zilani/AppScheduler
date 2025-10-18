@@ -18,7 +18,7 @@ import java.util.*
 class AppListAdapter(
     private val context: Context,
     var items: MutableList<AppInfo>,
-    private val onScheduleSaved: (item: AppInfo, hour: Int, minute: Int) -> Unit,
+    private val onScheduleSaved: (item: AppInfo, epochMs: Long) -> Unit,
     private val onScheduleRemoved: (item: AppInfo) -> Unit
 ) : RecyclerView.Adapter<AppListAdapter.VH>() {
 
@@ -131,11 +131,7 @@ class AppListAdapter(
             val scheduledMs = chosenCal.timeInMillis
             item.scheduledEpochMs = scheduledMs
             notifyItemChanged(position)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                onScheduleSaved(item, timePicker.hour, timePicker.minute)
-            } else {
-                onScheduleSaved(item, timePicker.currentHour, timePicker.currentMinute)
-            }
+            onScheduleSaved(item, scheduledMs)
 
             dialog.dismiss()
         }

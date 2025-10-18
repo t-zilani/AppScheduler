@@ -71,16 +71,14 @@ class ActivityViewModel(application: Application) : AndroidViewModel(application
         return intent != null
     }
 
-    fun scheduleAppLaunch(packageName: String, hour: Int, minute: Int) {
+    fun scheduleAppLaunch(packageName: String, epochMs: Long) {
         val context = getApplication<Application>()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         // Create a Calendar instance with the target time
         val calendar = Calendar.getInstance().apply {
             timeInMillis = System.currentTimeMillis()
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, minute)
-            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, epochMs.toInt())
         }
 
         // If the scheduled time has already passed for today, set it for tomorrow
