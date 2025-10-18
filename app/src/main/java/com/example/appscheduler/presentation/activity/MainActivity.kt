@@ -14,8 +14,10 @@ import com.example.appscheduler.presentation.viewmodel.ActivityViewModel
 import androidx.activity.viewModels
 import android.provider.Settings
 import com.example.appscheduler.presentation.adapter.AppListAdapter
+import com.example.appscheduler.utils.APLog
 import com.example.appscheduler.utils.UIUtils
 import java.util.Date
+import kotlin.math.min
 
 class MainActivity : AppCompatActivity() {
     private val TAG = "MainActivity"
@@ -41,12 +43,14 @@ class MainActivity : AppCompatActivity() {
         val adapter = AppListAdapter(
             context = this,
             items = appItems,
-            onScheduleSaved = { item, epochMs ->
+            onScheduleSaved = { item, hour, minute ->
                 // persist to DB and schedule AlarmManager
                 // e.g. viewModel.saveSchedule(item.packageName, epochMs)
-                Toast.makeText(this, "Scheduled ${item.appName} at ${Date(epochMs)}", Toast.LENGTH_SHORT).show()
-                val hourMinPair = UIUtils.convertMillisToHoursAndMinutes(epochMs)
-                onScheduleButtonClick(item.packageName, hourMinPair.first, hourMinPair.second)
+                //Toast.makeText(this, "Scheduled ${item.appName} at ${Date(epochMs)}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Scheduled ${item.appName} at $hour:$minute", Toast.LENGTH_SHORT).show()
+                //val hourMinPair = UIUtils.convertMillisToHoursAndMinutes(epochMs)
+                APLog.d(TAG, "check: package: ${item.appName}, time: $hour:$minute")
+                onScheduleButtonClick(item.packageName, hour, minute)
             },
             onScheduleRemoved = { item ->
                 // cancel scheduled alarm and update DB

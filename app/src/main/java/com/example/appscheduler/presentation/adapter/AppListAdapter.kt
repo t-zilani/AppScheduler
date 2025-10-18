@@ -2,6 +2,7 @@ package com.example.appscheduler.presentation.adapter
 
 import android.app.AlertDialog
 import android.content.Context
+import android.os.Build
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -17,7 +18,7 @@ import java.util.*
 class AppListAdapter(
     private val context: Context,
     var items: MutableList<AppInfo>,
-    private val onScheduleSaved: (item: AppInfo, scheduledEpochMs: Long) -> Unit,
+    private val onScheduleSaved: (item: AppInfo, hour: Int, minute: Int) -> Unit,
     private val onScheduleRemoved: (item: AppInfo) -> Unit
 ) : RecyclerView.Adapter<AppListAdapter.VH>() {
 
@@ -67,6 +68,7 @@ class AppListAdapter(
 
     fun updateApps(updatedApps: List<AppInfo>) {
         items = updatedApps.toMutableList()
+        notifyDataSetChanged()
     }
 
     private fun showTimePickerDialog(item: AppInfo, position: Int) {
@@ -129,7 +131,11 @@ class AppListAdapter(
             val scheduledMs = chosenCal.timeInMillis
             item.scheduledEpochMs = scheduledMs
             notifyItemChanged(position)
-            onScheduleSaved(item, scheduledMs)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                onScheduleSaved(item, timePicker.hour, timePicker.minute)
+            } else {
+                onScheduleSaved(item, timePicker.currentHour, timePicker.currentMinute)
+            }
 
             dialog.dismiss()
         }
