@@ -12,14 +12,21 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.example.appscheduler.AppLaunchReceiver
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
+import com.example.appscheduler.AppLaunchWorker
 import com.example.appscheduler.presentation.model.AppInfo
+import com.example.appscheduler.utils.APLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+import java.util.concurrent.TimeUnit
 
 class ActivityViewModel(application: Application) : AndroidViewModel(application) {
+    private val TAG = "ActivityViewModel"
     private val _appsList = MutableLiveData<List<AppInfo>>()
     val appsList: LiveData<List<AppInfo>> = _appsList
 
@@ -56,8 +63,10 @@ class ActivityViewModel(application: Application) : AndroidViewModel(application
                 if (!isSystemApp || hasLauncherIcon(packageManager, packageName)) {
                     val appName = resolveInfo.loadLabel(packageManager).toString()
                     val appIcon = resolveInfo.loadIcon(packageManager)
-                    apps.add(AppInfo(appName, packageName, appIcon))
-                    packageNames.add(packageName)
+                    if (appName != "AppScheduler") {
+                        apps.add(AppInfo(appName, packageName, appIcon))
+                        packageNames.add(packageName)
+                    }
                 }
             }
             withContext(Dispatchers.Main) {
@@ -71,50 +80,34 @@ class ActivityViewModel(application: Application) : AndroidViewModel(application
         return intent != null
     }
 
-    fun scheduleAppLaunch(packageName: String, epochMs: Long) {
-        val context = getApplication<Application>()
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-        // Create a Calendar instance with the target time
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = System.currentTimeMillis()
-            set(Calendar.MILLISECOND, epochMs.toInt())
+    fun scheduleWithWorkManager(context: Context, scheduleId: String, packageName: String, scheduledEpochMs: Long) {
+        val now = System.currentTimeMillis()
+        var delayMs = scheduledEpochMs - now
+        if (delayMs < 0) {
+            // If user selected earlier time, schedule for next day — or handle as you prefer
+            delayMs = 0L
         }
 
-        // If the scheduled time has already passed for today, set it for tomorrow
-        if (calendar.timeInMillis <= System.currentTimeMillis()) {
-            calendar.add(Calendar.DAY_OF_YEAR, 1)
-        }
-
-        val intent = Intent(context, AppLaunchReceiver::class.java).apply {
-            putExtra("packageName", packageName)
-        }
-
-        // Create a PendingIntent to be triggered by the alarm
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            packageName.hashCode(), // Use a unique request code for each app
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val input = workDataOf(
+            AppLaunchWorker.KEY_PACKAGE to packageName,
+            AppLaunchWorker.KEY_SCHEDULE_ID to scheduleId
         )
 
-        // Schedule the exact alarm
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                pendingIntent
-            )
-        }
+        val workRequest = OneTimeWorkRequestBuilder<AppLaunchWorker>()
+            .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
+            .setInputData(input)
+            .addTag("schedule-$scheduleId") // tag for cancellation
+            .build()
+
+        // Unique name helps with cancel/replace: use scheduleId-based name
+        val uniqueWorkName = "schedule-$scheduleId"
+
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(uniqueWorkName, ExistingWorkPolicy.REPLACE, workRequest)
     }
 
-    fun canScheduleExactAlarms(): Boolean {
-        val context = getApplication<Application>()
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            alarmManager.canScheduleExactAlarms()
-        } else {
-            true
-        }
+    fun cancelScheduledWork(context: Context, scheduleId: String) {
+        val uniqueWorkName = "schedule-$scheduleId"
+        WorkManager.getInstance(context).cancelUniqueWork(uniqueWorkName)
     }
 }

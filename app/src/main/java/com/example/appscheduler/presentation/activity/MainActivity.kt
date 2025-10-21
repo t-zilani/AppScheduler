@@ -13,10 +13,13 @@ import com.example.appscheduler.databinding.LayoutMainActivityBinding
 import com.example.appscheduler.presentation.viewmodel.ActivityViewModel
 import androidx.activity.viewModels
 import android.provider.Settings
+import androidx.core.content.ContentProviderCompat.requireContext
+import androidx.work.WorkManager
 import com.example.appscheduler.presentation.adapter.AppListAdapter
 import com.example.appscheduler.utils.APLog
 import com.example.appscheduler.utils.UIUtils
 import java.util.Date
+import java.util.UUID
 import kotlin.math.min
 
 class MainActivity : AppCompatActivity() {
@@ -48,10 +51,18 @@ class MainActivity : AppCompatActivity() {
             onScheduleSaved = { item, epochMs ->
                  Toast.makeText(this, "Scheduled ${item.appName} at ${Date(epochMs)}", Toast.LENGTH_SHORT).show()
                 APLog.d(TAG, "check: package: ${item.appName}, time: $${Date(epochMs)}")
-                onScheduleButtonClick(item.packageName, epochMs)
+
+                val scheduleId = UUID.randomUUID().toString()
+                // TODO
+                //viewModel.saveScheduleToDb(scheduleId, app.packageName, scheduledMs) // persist schedule
+
+                viewModel.scheduleWithWorkManager(context = this, scheduleId = scheduleId, packageName = item.packageName, scheduledEpochMs = epochMs)
             },
             onScheduleRemoved = { item ->
                   Toast.makeText(this, "Removed schedule for ${item.appName}", Toast.LENGTH_SHORT).show()
+                viewModel.cancelScheduledWork(this, scheduleId = item.scheduledEpochMs.toString())
+            //TODO keep scheduleid on roomdb
+            //viewModel.markScheduleCancelled(scheduleId)
             }
         )
         binding.recyclerView.adapter = adapter
@@ -65,24 +76,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun onScheduleButtonClick(selectedAppPackageName: String, epochMs: Long) {
-        // Check if permission is granted first
-        if (viewModel.canScheduleExactAlarms()) {
-            viewModel.scheduleAppLaunch(selectedAppPackageName, epochMs)
-            Toast.makeText(this, "Scheduled $selectedAppPackageName for ${Date(epochMs)}", Toast.LENGTH_SHORT).show()
-        } else {
-            // Request the permission if not already granted
-            requestExactAlarmPermission()
-        }
-    }
-
-    private fun requestExactAlarmPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            if (!alarmManager.canScheduleExactAlarms()) {
-                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                startActivity(intent)
-            }
-        }
+    fun getWorkerStatus() {
+        val workManager = WorkManager.getInstance(this)
+//        workManager.getWorkInfosForUniqueWorkLiveData("schedule-$scheduleId")
+//            .observe(this) { workInfos ->
+//                // inspect workInfos list: state, outputData, runAttemptCount, etc.
+//            }
     }
 }

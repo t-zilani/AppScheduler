@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     kotlin("android")
+    kotlin("kapt")
 }
 
 android {
@@ -44,6 +45,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.10")
 
+
     val lifecycle_version = "2.7.0" // Check for the latest version
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:$lifecycle_version")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:$lifecycle_version")
@@ -51,4 +53,11 @@ dependencies {
     // For the by viewModels() property delegate in Activities
     val activity_ktx_version = "1.9.0" // Check for the latest version
     implementation("androidx.activity:activity-ktx:$activity_ktx_version")
+
+    implementation("androidx.work:work-runtime-ktx:2.8.1")   // or latest
+    implementation("androidx.core:core-ktx:1.10.0")
+    implementation("com.google.android.material:material:1.10.0")
+
+    implementation("androidx.hilt:hilt-work:1.0.0")
+    kapt("androidx.hilt:hilt-compiler:1.0.0")
 }
