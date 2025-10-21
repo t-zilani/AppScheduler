@@ -35,8 +35,7 @@ class MainActivity : AppCompatActivity() {
         val view = binding.root
         setContentView(view)
 
-
-
+        checkNotificationPermission()
         initAdapter()
     }
 
@@ -83,4 +82,49 @@ class MainActivity : AppCompatActivity() {
 //                // inspect workInfos list: state, outputData, runAttemptCount, etc.
 //            }
     }
+
+    private val REQUEST_NOTIFICATION_PERMISSION = 1001
+
+    private fun checkNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(
+                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                    REQUEST_NOTIFICATION_PERMISSION
+                )
+            }
+        }
+    }
+
+    // Handle user response
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_NOTIFICATION_PERMISSION) {
+            if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                // Permission granted
+                Toast.makeText(this, "Allowed notifications", Toast.LENGTH_SHORT).show()
+            } else {
+                // Permission denied — explain why notifications are important
+                // Optional: show a dialog to open settings
+                Toast.makeText(this, "Scheduling will not work in background mode, allow notifications from settings", Toast.LENGTH_SHORT).show()
+                openNotificationSettings()
+            }
+        }
+    }
+
+    private fun openNotificationSettings() {
+        val intent = Intent().apply {
+            action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
+            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        }
+        startActivity(intent)
+    }
+
+
 }

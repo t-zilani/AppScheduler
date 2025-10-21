@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
@@ -15,6 +16,9 @@ import com.example.appscheduler.receivers.CancelScheduleReceiver
 import com.example.appscheduler.utils.APLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
+import java.util.*
 
 class AppLaunchWorker(
     context: Context,
@@ -33,114 +37,83 @@ class AppLaunchWorker(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val packageName = inputData.getString(KEY_PACKAGE)
-        val scheduleId = inputData.getString(KEY_SCHEDULE_ID)
+        val packageName = inputData.getString(KEY_PACKAGE) ?: return@withContext Result.failure()
+        val scheduleId = inputData.getString(KEY_SCHEDULE_ID) ?: UUID.randomUUID().toString()
 
-        if (packageName.isNullOrBlank()) {
-            APLog.d(TAG, "No package provided")
-            return@withContext Result.failure(
-                Data.Builder().putString("reason", "NO_PACKAGE").build()
-            )
-        }
+        val pm = applicationContext.packageManager
+        val launchIntent = pm.getLaunchIntentForPackage(packageName)
 
-        try {
-            // Attempt to get launch intent
-            val pm: PackageManager = applicationContext.packageManager
-            val launchIntent = pm.getLaunchIntentForPackage(packageName)
-
-            if (launchIntent != null) {
-                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-                try {
-                    // Attempt to start activity (may be blocked by OS)
-                    applicationContext.startActivity(launchIntent)
-
-                    // Success — return success with details
-                    return@withContext Result.success(
-                        Data.Builder()
-                            .putString("result", "LAUNCHED_OK")
-                            .putString("package", packageName)
-                            .putString("scheduleId", scheduleId)
-                            .build()
-                    )
-                } catch (ex: Exception) {
-                    // Starting activity failed (SecurityException or other)
-                    APLog.d(TAG, "startActivity blocked or failed: ${ex.message}, $ex")
-                    // Fallback to notification below
-                }
-            } else {
-                // No launch intent — app likely cannot be launched directly
-                APLog.d(TAG, "No launch intent for package: $packageName")
-                // Fallback to notification below
+        if (launchIntent != null && isAppInForeground()) {
+            // App is in foreground → safe to launch directly
+            try {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                applicationContext.startActivity(launchIntent)
+                return@withContext Result.success()
+            } catch (e: Exception) {
+                // If any exception (rare), fallback to notification
+                APLog.d(TAG, "Foreground launch failed: ${e.message}")
             }
-
-            // If we reach here: either no launchIntent or startActivity failed.
-            // Build a notification with "Open app" action that user can tap.
-            sendFallbackNotification(packageName, scheduleId!!)
-
-            return@withContext Result.success(
-                Data.Builder()
-                    .putString("result", "FALLBACK_NOTIFICATION_POSTED")
-                    .putString("package", packageName)
-                    .putString("scheduleId", scheduleId)
-                    .build()
-            )
-        } catch (t: Throwable) {
-            APLog.d(TAG, "Worker failed: ${t.message}, $t")
-            return@withContext Result.failure(
-                Data.Builder().putString("reason", t.message ?: "UNKNOWN").build()
-            )
         }
+
+        // Background or failed → show notification
+        sendFallbackNotification(packageName, scheduleId)
+        return@withContext Result.success()
     }
 
+
+    // Build and post a notification that the user can tap to open the target app.
     private fun sendFallbackNotification(packageName: String, scheduleId: String) {
         val context = applicationContext
         createChannelIfNeeded(context)
 
         val appLabel = getAppLabel(context, packageName)
 
-        // --- Cancel button setup here ---
+        // Cancel action - delivered as Broadcast to CancelScheduleReceiver
         val cancelIntent = Intent(context, CancelScheduleReceiver::class.java).apply {
-            putExtra("scheduleId", scheduleId)
-            putExtra("packageName", packageName)
+            putExtra(KEY_SCHEDULE_ID, scheduleId)
+            putExtra(KEY_PACKAGE, packageName)
         }
         val cancelPending = PendingIntent.getBroadcast(
             context,
             ("cancel-$scheduleId").hashCode(),
             cancelIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            getPendingIntentFlags()
         )
-        // -------------------------------
 
-        // Build main intent to open app
+        // Main launch intent (app) or Play Store fallback if app not installed
         val pm = context.packageManager
-        val launchIntent = pm.getLaunchIntentForPackage(packageName)?.apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        }
+        val launchIntent = pm.getLaunchIntentForPackage(packageName)
+        val targetIntent = launchIntent ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName"))
+
+        // Add recommended flags for PendingIntent-launched activities
+        targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
         val openPending = PendingIntent.getActivity(
             context,
             packageName.hashCode(),
-            launchIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            targetIntent,
+            getPendingIntentFlags()
         )
 
-        // Notification
+        val notificationId = NOTIF_ID_BASE + (scheduleId.hashCode() and 0x7FFFFFFF)
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.drawable.ic_notification) // replace with your app icon
             .setContentTitle("$appLabel was scheduled")
-            .setContentText("Tap to open or cancel the schedule.")
+            .setContentText("Tap to open $appLabel now, or cancel the schedule.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(openPending)
-            .addAction(R.drawable.ic_open, "Open app", openPending)
-            .addAction(R.drawable.ic_cancel, "Cancel", cancelPending) // ← Add here
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setContentIntent(openPending) // tap body -> open app
+            .addAction(R.drawable.ic_open, "Open app", openPending) // action button
+            .addAction(R.drawable.ic_cancel, "Cancel", cancelPending) // cancel action
             .build()
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify((scheduleId.hashCode() and 0x7FFFFFFF), notification)
-    }
+        nm.notify(notificationId, notification)
 
+        APLog.d(TAG, "Posted fallback notification for $packageName (notifId=$notificationId)")
+    }
 
     private fun getAppLabel(context: Context, packageName: String): String {
         return try {
@@ -156,7 +129,7 @@ class AppLaunchWorker(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "App Scheduler",
+                CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Notifications for scheduled app launches"
@@ -168,7 +141,6 @@ class AppLaunchWorker(
         }
     }
 
-
     private fun getPendingIntentFlags(): Int {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -176,4 +148,9 @@ class AppLaunchWorker(
             PendingIntent.FLAG_UPDATE_CURRENT
         }
     }
+
+    private fun isAppInForeground(): Boolean {
+        return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+    }
+
 }

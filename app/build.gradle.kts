@@ -57,6 +57,8 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.8.1")   // or latest
     implementation("androidx.core:core-ktx:1.10.0")
     implementation("com.google.android.material:material:1.10.0")
+    implementation("androidx.lifecycle:lifecycle-process:2.6.2")
+
 
     implementation("androidx.hilt:hilt-work:1.0.0")
     kapt("androidx.hilt:hilt-compiler:1.0.0")
