@@ -7,7 +7,6 @@ import com.example.appscheduler.data.ScheduleRepository
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
-        // Initialize DB & repo singletons
         AppDatabase.getInstance(this)
         ScheduleRepository.getInstance(this)
     }

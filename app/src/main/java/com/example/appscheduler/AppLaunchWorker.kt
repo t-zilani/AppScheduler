@@ -87,15 +87,15 @@ class AppLaunchWorker(
         val notificationId = NOTIF_ID_BASE + (scheduleId.hashCode() and 0x7FFFFFFF)
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification) // replace with your app icon
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("$appLabel was scheduled")
             .setContentText("Tap to open $appLabel now, or cancel the schedule.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setContentIntent(openPending) // tap body -> open app
-            .addAction(R.drawable.ic_open, "Open app", openPending) // action button
-            .addAction(R.drawable.ic_cancel, "Cancel", cancelPending) // cancel action
+            .setContentIntent(openPending)
+            .addAction(R.drawable.ic_open, "Open app", openPending)
+            .addAction(R.drawable.ic_cancel, "Cancel", cancelPending)
             .build()
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

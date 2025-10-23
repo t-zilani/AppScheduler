@@ -13,7 +13,6 @@ interface ScheduleDao {
     @Query("SELECT * FROM schedule WHERE id = :id LIMIT 1")
     suspend fun getScheduleById(id: String): Schedule?
 
-    // NEW: find by package name
     @Query("SELECT * FROM schedule WHERE packageName = :packageName LIMIT 1")
     suspend fun getScheduleByPackage(packageName: String): Schedule?
 
