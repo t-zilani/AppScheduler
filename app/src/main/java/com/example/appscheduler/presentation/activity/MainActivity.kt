@@ -1,32 +1,27 @@
-package com.example.appscheduler.presentation.activity   // ← use your actual package name
+package com.example.appscheduler.presentation.activity
 
-import android.app.AlarmManager
-import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.appscheduler.presentation.model.AppInfo
 import com.example.appscheduler.databinding.LayoutMainActivityBinding
 import com.example.appscheduler.presentation.viewmodel.ActivityViewModel
 import androidx.activity.viewModels
 import android.provider.Settings
-import androidx.core.content.ContentProviderCompat.requireContext
-import androidx.work.WorkManager
+import androidx.appcompat.app.AlertDialog
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.appscheduler.presentation.adapter.AppListAdapter
+import com.example.appscheduler.presentation.viewmodel.ScheduleViewModel
 import com.example.appscheduler.utils.APLog
-import com.example.appscheduler.utils.UIUtils
-import java.util.Date
-import java.util.UUID
-import kotlin.math.min
 
 class MainActivity : AppCompatActivity() {
     private val TAG = "MainActivity"
-
+    private val REQUEST_NOTIFICATION_PERMISSION = 1001
     private lateinit var binding: LayoutMainActivityBinding
-    private val viewModel: ActivityViewModel by viewModels()
+    private val appListViewModel: ActivityViewModel by viewModels()
+    private val scheduleViewModel: ScheduleViewModel by viewModels()
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,54 +31,74 @@ class MainActivity : AppCompatActivity() {
         setContentView(view)
 
         checkNotificationPermission()
-        initAdapter()
+        initAppList()
     }
 
-    private fun initAdapter() {
-
-        val appItems = mutableListOf<AppInfo>() // fill this list with installed apps
-
-        binding.recyclerView.layoutManager = LinearLayoutManager(this)
-        val adapter = AppListAdapter(
-            context = this,
-            items = appItems,
-            onScheduleSaved = { item, epochMs ->
-                 Toast.makeText(this, "Scheduled ${item.appName} at ${Date(epochMs)}", Toast.LENGTH_SHORT).show()
-                APLog.d(TAG, "check: package: ${item.appName}, time: $${Date(epochMs)}")
-
-                val scheduleId = UUID.randomUUID().toString()
-                // TODO
-                //viewModel.saveScheduleToDb(scheduleId, app.packageName, scheduledMs) // persist schedule
-
-                viewModel.scheduleWithWorkManager(context = this, scheduleId = scheduleId, packageName = item.packageName, scheduledEpochMs = epochMs)
-            },
-            onScheduleRemoved = { item ->
-                  Toast.makeText(this, "Removed schedule for ${item.appName}", Toast.LENGTH_SHORT).show()
-                viewModel.cancelScheduledWork(this, scheduleId = item.scheduledEpochMs.toString())
-            //TODO keep scheduleid on roomdb
-            //viewModel.markScheduleCancelled(scheduleId)
-            }
-        )
-        binding.recyclerView.adapter = adapter
-
-        // Observe the LiveData from the ViewModel
-        viewModel.appsList.observe(this) { apps ->
-            // Update the adapter with the new list of apps
+    private fun initAppList() {
+        appListViewModel.appsList.observe(this) { apps ->
             apps?.let {
-                adapter.updateApps(it)
+                initAdapter(it)
             }
         }
     }
 
-    fun getWorkerStatus() {
-        val workManager = WorkManager.getInstance(this)
-//        workManager.getWorkInfosForUniqueWorkLiveData("schedule-$scheduleId")
-//            .observe(this) { workInfos ->
-//                // inspect workInfos list: state, outputData, runAttemptCount, etc.
-//            }
+    private fun initAdapter(apps: List<AppInfo>) {
+        // inside your Fragment or Activity
+        val appList: MutableList<AppInfo> = apps.toMutableList()
+        APLog.d(TAG, "initAdapter: appList: $appList")
+// assume viewModel: ScheduleViewModel (from earlier) and recyclerView already set up
+        binding.recyclerView.layoutManager = LinearLayoutManager(this)
+        val adapter = AppListAdapter(
+            context = this@MainActivity,
+            items = appList, // initial list
+            onScheduleSaved = { appInfo, epochMs, onSaved ->
+                // call ViewModel to persist + schedule WorkManager
+                scheduleViewModel.createAndSchedule(
+                    appInfo.appName,
+                    appInfo.packageName,
+                    epochMs
+                ) { success, result ->
+                    if (success) {
+                        // result contains scheduleId (as per previous ViewModel implementation)
+                        val scheduleId = result
+                        // inform adapter about the persisted id
+                        onSaved(scheduleId.toString())
+                    } else {
+                        appInfo.scheduledEpochMs = null
+                        binding.recyclerView.adapter?.notifyDataSetChanged()
+                        val errMsg = result
+                        Toast.makeText(this@MainActivity, errMsg.toString(), Toast.LENGTH_LONG)
+                            .show()
+                    }
+                }
+            },
+            onScheduleRemoved = { appInfo ->
+                if (!appInfo.scheduleId.isNullOrBlank()) {
+                    scheduleViewModel.cancelSchedule(appInfo.scheduleId!!)
+                } else {
+                    appInfo.scheduledEpochMs = null
+                    binding.recyclerView.adapter?.notifyDataSetChanged()
+                }
+            }
+        )
+        binding.recyclerView.adapter = adapter
     }
 
-    private val REQUEST_NOTIFICATION_PERMISSION = 1001
+    // inside Activity/Fragment with viewModel: ScheduleViewModel
+    private fun onUserSavedSchedule(appLabel: String, packageName: String, epochMs: Long) {
+        scheduleViewModel.createAndSchedule(appLabel, packageName, epochMs) { ok, info ->
+            if (ok) {
+                Toast.makeText(this@MainActivity, "Scheduled", Toast.LENGTH_SHORT).show()
+            } else {
+                // info contains message: conflict or error
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Schedule conflict")
+                    .setMessage(info.toString())
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+        }
+    }
 
     private fun checkNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -98,7 +113,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Handle user response
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -107,11 +121,8 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_NOTIFICATION_PERMISSION) {
             if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                // Permission granted
                 Toast.makeText(this, "Allowed notifications", Toast.LENGTH_SHORT).show()
             } else {
-                // Permission denied — explain why notifications are important
-                // Optional: show a dialog to open settings
                 Toast.makeText(this, "Scheduling will not work in background mode, allow notifications from settings", Toast.LENGTH_SHORT).show()
                 openNotificationSettings()
             }
@@ -125,6 +136,4 @@ class MainActivity : AppCompatActivity() {
         }
         startActivity(intent)
     }
-
-
 }

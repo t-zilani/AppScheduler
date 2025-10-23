@@ -6,5 +6,6 @@ data class AppInfo(
     val appName: String,
     val packageName: String,
     val icon: Drawable,
-    var scheduledEpochMs: Long? = null
+    var scheduledEpochMs: Long? = null,
+    var scheduleId: String? = null
 )

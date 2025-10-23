@@ -12,16 +12,37 @@ import android.widget.TimePicker
 import androidx.recyclerview.widget.RecyclerView
 import com.example.appscheduler.R
 import com.example.appscheduler.presentation.model.AppInfo
+import com.example.appscheduler.utils.APLog
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * Adapter for showing installed apps. Each row:
+ *  - shows app icon & name
+ *  - shows scheduled time & "Remove" when scheduled
+ *  - clicking card shows time picker dialog
+ *
+ * Note: onScheduleSaved now includes an onSaved callback so the caller (ViewModel)
+ * can persist and return the scheduleId which the adapter will store on the item.
+ */
 class AppListAdapter(
     private val context: Context,
     var items: MutableList<AppInfo>,
-    private val onScheduleSaved: (item: AppInfo, epochMs: Long) -> Unit,
+    /**
+     * Called when user chooses a time and saves.
+     * The adapter will update the UI immediately (scheduledEpochMs) and then call this callback.
+     * Caller should persist the schedule (Room) and schedule WorkManager, then call the provided
+     * onSaved(scheduleId) callback with the generated scheduleId (UUID from repository).
+     */
+    private val onScheduleSaved: (item: AppInfo, epochMs: Long, onSaved: (scheduleId: String) -> Unit) -> Unit,
+
+    /**
+     * Called when user taps Remove. Item.scheduleId may be null if schedule wasn't persisted yet.
+     * Caller should cancel WorkManager + update DB if scheduleId present.
+     */
     private val onScheduleRemoved: (item: AppInfo) -> Unit
 ) : RecyclerView.Adapter<AppListAdapter.VH>() {
-
+    private val TAG = "AppListAdapter"
     private val timeFormatter = SimpleDateFormat("MMM d, yyyy — hh:mm a", Locale.getDefault())
 
     inner class VH(view: View) : RecyclerView.ViewHolder(view) {
@@ -34,6 +55,7 @@ class AppListAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+        APLog.d(TAG, "onCreateViewHolder: viewType $viewType")
         val v = LayoutInflater.from(parent.context).inflate(R.layout.item_app_card, parent, false)
         return VH(v)
     }
@@ -56,9 +78,11 @@ class AppListAdapter(
             showTimePickerDialog(item, position)
         }
 
-        // Remove click -> clear schedule for this item
+        // Remove click -> clear schedule for this item (UI) and notify caller
         holder.removeSchedule.setOnClickListener {
+            // Keep scheduleId (if present) so caller can cancel using exact id
             item.scheduledEpochMs = null
+            // Do not wipe scheduleId here immediately — caller will decide.
             notifyItemChanged(position)
             onScheduleRemoved(item)
         }
@@ -69,6 +93,33 @@ class AppListAdapter(
     fun updateApps(updatedApps: List<AppInfo>) {
         items = updatedApps.toMutableList()
         notifyDataSetChanged()
+    }
+
+    /**
+     * Helper to update the scheduleId for a package (called by owner after DB insert)
+     * Finds the matching item by packageName and sets scheduleId & scheduledEpochMs if provided.
+     */
+    fun applySavedScheduleInfo(packageName: String, scheduleId: String, scheduledEpochMs: Long) {
+        val idx = items.indexOfFirst { it.packageName == packageName }
+        if (idx >= 0) {
+            val it = items[idx]
+            it.scheduleId = scheduleId
+            it.scheduledEpochMs = scheduledEpochMs
+            notifyItemChanged(idx)
+        }
+    }
+
+    /**
+     * If you need to remove scheduleId after cancel (owner can call this).
+     */
+    fun clearScheduleForScheduleId(scheduleId: String) {
+        val idx = items.indexOfFirst { it.scheduleId == scheduleId }
+        if (idx >= 0) {
+            val it = items[idx]
+            it.scheduleId = null
+            it.scheduledEpochMs = null
+            notifyItemChanged(idx)
+        }
     }
 
     private fun showTimePickerDialog(item: AppInfo, position: Int) {
@@ -93,7 +144,7 @@ class AppListAdapter(
 
         // TimePicker API differs by SDK for getting/setting:
         timePicker.setIs24HourView(false)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             timePicker.hour = initialCalendar.get(Calendar.HOUR_OF_DAY)
             timePicker.minute = initialCalendar.get(Calendar.MINUTE)
         } else {
@@ -113,7 +164,7 @@ class AppListAdapter(
             chosenCal.set(Calendar.SECOND, 0)
             chosenCal.set(Calendar.MILLISECOND, 0)
 
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 chosenCal.set(Calendar.HOUR_OF_DAY, timePicker.hour)
                 chosenCal.set(Calendar.MINUTE, timePicker.minute)
             } else {
@@ -129,9 +180,19 @@ class AppListAdapter(
             }
 
             val scheduledMs = chosenCal.timeInMillis
+
+            // Optimistic UI update
             item.scheduledEpochMs = scheduledMs
             notifyItemChanged(position)
-            onScheduleSaved(item, scheduledMs)
+
+            // Call caller to persist & create WorkManager job.
+            // The caller must call the onSaved callback with the generated scheduleId
+            onScheduleSaved(item, scheduledMs) { generatedScheduleId ->
+                // Apply the scheduleId returned by repository/VM
+                item.scheduleId = generatedScheduleId
+                // In case caller updated any other fields, ensure UI refresh
+                notifyItemChanged(position)
+            }
 
             dialog.dismiss()
         }

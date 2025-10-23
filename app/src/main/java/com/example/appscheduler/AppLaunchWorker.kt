@@ -38,7 +38,7 @@ class AppLaunchWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val packageName = inputData.getString(KEY_PACKAGE) ?: return@withContext Result.failure()
-        val scheduleId = inputData.getString(KEY_SCHEDULE_ID) ?: UUID.randomUUID().toString()
+        val scheduleId = inputData.getLong(KEY_SCHEDULE_ID, 0) ?: UUID.randomUUID().timestamp()
 
         val pm = applicationContext.packageManager
         val launchIntent = pm.getLaunchIntentForPackage(packageName)
@@ -62,7 +62,7 @@ class AppLaunchWorker(
 
 
     // Build and post a notification that the user can tap to open the target app.
-    private fun sendFallbackNotification(packageName: String, scheduleId: String) {
+    private fun sendFallbackNotification(packageName: String, scheduleId: Long) {
         val context = applicationContext
         createChannelIfNeeded(context)
 

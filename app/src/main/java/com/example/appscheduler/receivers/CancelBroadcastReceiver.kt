@@ -4,7 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.work.WorkManager
-//import com.example.appscheduler.data.ScheduleRepository // optional: your repo to update DB
+//import com.example.appscheduler.ScheduleRepository // optional: your repo to update DB
 
 class CancelScheduleReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
