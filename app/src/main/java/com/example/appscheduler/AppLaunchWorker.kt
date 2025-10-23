@@ -5,12 +5,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
-import androidx.work.Data
 import androidx.work.WorkerParameters
 import com.example.appscheduler.receivers.CancelScheduleReceiver
 import com.example.appscheduler.utils.APLog
@@ -30,7 +28,6 @@ class AppLaunchWorker(
         const val KEY_PACKAGE = "packageName"
         const val KEY_SCHEDULE_ID = "scheduleId"
 
-        // Notification channel id
         private const val CHANNEL_ID = "app_scheduler_channel"
         private const val CHANNEL_NAME = "App Scheduler"
         private const val NOTIF_ID_BASE = 1000
@@ -44,31 +41,25 @@ class AppLaunchWorker(
         val launchIntent = pm.getLaunchIntentForPackage(packageName)
 
         if (launchIntent != null && isAppInForeground()) {
-            // App is in foreground → safe to launch directly
             try {
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 applicationContext.startActivity(launchIntent)
                 return@withContext Result.success()
             } catch (e: Exception) {
-                // If any exception (rare), fallback to notification
                 APLog.d(TAG, "Foreground launch failed: ${e.message}")
             }
         }
 
-        // Background or failed → show notification
         sendFallbackNotification(packageName, scheduleId)
         return@withContext Result.success()
     }
 
-
-    // Build and post a notification that the user can tap to open the target app.
     private fun sendFallbackNotification(packageName: String, scheduleId: Long) {
         val context = applicationContext
         createChannelIfNeeded(context)
 
         val appLabel = getAppLabel(context, packageName)
 
-        // Cancel action - delivered as Broadcast to CancelScheduleReceiver
         val cancelIntent = Intent(context, CancelScheduleReceiver::class.java).apply {
             putExtra(KEY_SCHEDULE_ID, scheduleId)
             putExtra(KEY_PACKAGE, packageName)
@@ -80,12 +71,10 @@ class AppLaunchWorker(
             getPendingIntentFlags()
         )
 
-        // Main launch intent (app) or Play Store fallback if app not installed
         val pm = context.packageManager
         val launchIntent = pm.getLaunchIntentForPackage(packageName)
         val targetIntent = launchIntent ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName"))
 
-        // Add recommended flags for PendingIntent-launched activities
         targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
         val openPending = PendingIntent.getActivity(
@@ -152,5 +141,4 @@ class AppLaunchWorker(
     private fun isAppInForeground(): Boolean {
         return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
     }
-
 }

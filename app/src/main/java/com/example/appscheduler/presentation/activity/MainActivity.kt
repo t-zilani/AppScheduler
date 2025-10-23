@@ -26,6 +26,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (supportActionBar != null) {
+            supportActionBar?.title = "App Scheduler";
+        }
         binding = LayoutMainActivityBinding.inflate(layoutInflater)
         val view = binding.root
         setContentView(view)
@@ -52,16 +55,13 @@ class MainActivity : AppCompatActivity() {
             context = this@MainActivity,
             items = appList, // initial list
             onScheduleSaved = { appInfo, epochMs, onSaved ->
-                // call ViewModel to persist + schedule WorkManager
                 scheduleViewModel.createAndSchedule(
                     appInfo.appName,
                     appInfo.packageName,
                     epochMs
                 ) { success, result ->
                     if (success) {
-                        // result contains scheduleId (as per previous ViewModel implementation)
                         val scheduleId = result
-                        // inform adapter about the persisted id
                         onSaved(scheduleId.toString())
                     } else {
                         appInfo.scheduledEpochMs = null

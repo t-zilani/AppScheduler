@@ -32,8 +32,6 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
             )
             try {
                 repo.insertSchedule(schedule)
-
-                // schedule WorkManager job
                 WorkManagerHelper.scheduleWithWorkManager(getApplication(), scheduleId, packageName, scheduledEpochMs)
                 onResult(true, scheduleId)
             } catch (ce: ConflictException) {

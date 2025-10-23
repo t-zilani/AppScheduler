@@ -1,7 +1,6 @@
 package com.example.appscheduler.data
 
 import android.content.Context
-import com.example.appscheduler.data.entities.ExecutionLog
 import com.example.appscheduler.data.entities.Schedule
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,12 +26,6 @@ class ScheduleRepository private constructor(
      */
     suspend fun insertSchedule(schedule: Schedule) {
         withContext(Dispatchers.IO) {
-//            val start = schedule.scheduledEpochMs - conflictWindowMs
-//            val end = schedule.scheduledEpochMs + conflictWindowMs
-//            val conflict = scheduleDao.findAnyInRange(start, end)
-//            if (conflict.isNotEmpty()) {
-//                throw ConflictException("Conflicts with existing schedules.")
-//            }
             scheduleDao.insert(schedule)
         }
     }
