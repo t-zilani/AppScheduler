@@ -46,32 +46,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initAdapter(apps: List<AppInfo>) {
-        // inside your Fragment or Activity
         val appList: MutableList<AppInfo> = apps.toMutableList()
         APLog.d(TAG, "initAdapter: appList: $appList")
-// assume viewModel: ScheduleViewModel (from earlier) and recyclerView already set up
+
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         val adapter = AppListAdapter(
             context = this@MainActivity,
-            items = appList, // initial list
+            items = appList,
             onScheduleSaved = { appInfo, epochMs, onSaved ->
-                scheduleViewModel.createAndSchedule(
-                    appInfo.appName,
-                    appInfo.packageName,
-                    epochMs
-                ) { success, result ->
+                scheduleViewModel.createOrUpdateSchedule(appInfo.appName, appInfo.packageName, epochMs) { success, result ->
                     if (success) {
                         val scheduleId = result
-                        onSaved(scheduleId.toString())
+                        onSaved(scheduleId) // adapter stores scheduleId on the AppInfo item
                     } else {
+                        Toast.makeText(this, result, Toast.LENGTH_LONG).show()
                         appInfo.scheduledEpochMs = null
                         binding.recyclerView.adapter?.notifyDataSetChanged()
-                        val errMsg = result
-                        Toast.makeText(this@MainActivity, errMsg.toString(), Toast.LENGTH_LONG)
-                            .show()
                     }
                 }
             },
+
             onScheduleRemoved = { appInfo ->
                 if (!appInfo.scheduleId.isNullOrBlank()) {
                     scheduleViewModel.cancelSchedule(appInfo.scheduleId!!)
@@ -82,22 +76,6 @@ class MainActivity : AppCompatActivity() {
             }
         )
         binding.recyclerView.adapter = adapter
-    }
-
-    // inside Activity/Fragment with viewModel: ScheduleViewModel
-    private fun onUserSavedSchedule(appLabel: String, packageName: String, epochMs: Long) {
-        scheduleViewModel.createAndSchedule(appLabel, packageName, epochMs) { ok, info ->
-            if (ok) {
-                Toast.makeText(this@MainActivity, "Scheduled", Toast.LENGTH_SHORT).show()
-            } else {
-                // info contains message: conflict or error
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Schedule conflict")
-                    .setMessage(info.toString())
-                    .setPositiveButton("OK", null)
-                    .show()
-            }
-        }
     }
 
     private fun checkNotificationPermission() {

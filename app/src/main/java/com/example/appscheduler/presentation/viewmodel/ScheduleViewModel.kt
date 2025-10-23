@@ -14,14 +14,34 @@ import java.util.UUID
 class ScheduleViewModel(application: Application) : AndroidViewModel(application) {
     private val repo = ScheduleRepository.getInstance(application)
 
-//    // observable schedules
-//    val schedulesFlow = repo.getAllSchedulesFlow()
-//        .map { it } // you can map to UI model if needed
-//        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-    fun createAndSchedule(appLabel: String, packageName: String, scheduledEpochMs: Long, onResult: (Boolean, Long?) -> Unit) {
+    fun createOrUpdateSchedule(
+        appLabel: String,
+        packageName: String,
+        scheduledEpochMs: Long,
+        conflictWindowMs: Long = 0L,
+        onResult: (success: Boolean, scheduleIdOrMsg: String) -> Unit
+    ) {
         viewModelScope.launch {
-            val scheduleId = UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE
+            try {
+                val scheduleId = repo.createOrUpdateSchedule(packageName, appLabel, scheduledEpochMs, conflictWindowMs)
+                onResult(true, scheduleId)
+            } catch (ce: ConflictException) {
+                onResult(false, ce.message ?: "Conflict")
+            } catch (t: Throwable) {
+                onResult(false, t.message ?: "Error")
+            }
+        }
+    }
+
+    fun cancelSchedule(scheduleId: String) {
+        viewModelScope.launch {
+            repo.cancelSchedule(scheduleId)
+        }
+    }
+
+    fun createAndSchedule(appLabel: String, packageName: String, scheduledEpochMs: Long, onResult: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            val scheduleId = UUID.randomUUID().toString()
             val schedule = Schedule(
                 id = scheduleId,
                 packageName = packageName,
@@ -35,16 +55,10 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 WorkManagerHelper.scheduleWithWorkManager(getApplication(), scheduleId, packageName, scheduledEpochMs)
                 onResult(true, scheduleId)
             } catch (ce: ConflictException) {
-                onResult(false, -1)
+                onResult(false, "$ce")
             } catch (t: Throwable) {
-                onResult(false, -1)
+                onResult(false, "$t")
             }
-        }
-    }
-
-    fun cancelSchedule(scheduleId: String) {
-        viewModelScope.launch {
-            repo.cancelSchedule(scheduleId)
         }
     }
 }

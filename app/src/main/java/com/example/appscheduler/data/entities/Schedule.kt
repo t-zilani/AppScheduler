@@ -5,7 +5,8 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "schedule")
 data class Schedule(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey
+    val id: String,
     val packageName: String,
     val label: String,
     val scheduledEpochMs: Long,

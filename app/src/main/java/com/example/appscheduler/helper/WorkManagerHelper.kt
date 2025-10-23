@@ -2,7 +2,7 @@ import android.content.Context
 import com.example.appscheduler.AppLaunchWorker
 
 object WorkManagerHelper {
-    fun scheduleWithWorkManager(context: Context, scheduleId: Long, packageName: String, scheduledEpochMs: Long) {
+    fun scheduleWithWorkManager(context: Context, scheduleId: String, packageName: String, scheduledEpochMs: Long) {
         val now = System.currentTimeMillis()
         var delayMs = scheduledEpochMs - now
         if (delayMs < 0) delayMs = 0L

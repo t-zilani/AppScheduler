@@ -79,35 +79,4 @@ class ActivityViewModel(application: Application) : AndroidViewModel(application
         val intent = packageManager.getLaunchIntentForPackage(packageName)
         return intent != null
     }
-
-    fun scheduleWithWorkManager(context: Context, scheduleId: String, packageName: String, scheduledEpochMs: Long) {
-        val now = System.currentTimeMillis()
-        var delayMs = scheduledEpochMs - now
-        if (delayMs < 0) {
-            // If user selected earlier time, schedule for next day — or handle as you prefer
-            delayMs = 0L
-        }
-
-        val input = workDataOf(
-            AppLaunchWorker.KEY_PACKAGE to packageName,
-            AppLaunchWorker.KEY_SCHEDULE_ID to scheduleId
-        )
-
-        val workRequest = OneTimeWorkRequestBuilder<AppLaunchWorker>()
-            .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
-            .setInputData(input)
-            .addTag("schedule-$scheduleId") // tag for cancellation
-            .build()
-
-        // Unique name helps with cancel/replace: use scheduleId-based name
-        val uniqueWorkName = "schedule-$scheduleId"
-
-        WorkManager.getInstance(context)
-            .enqueueUniqueWork(uniqueWorkName, ExistingWorkPolicy.REPLACE, workRequest)
-    }
-
-    fun cancelScheduledWork(context: Context, scheduleId: String) {
-        val uniqueWorkName = "schedule-$scheduleId"
-        WorkManager.getInstance(context).cancelUniqueWork(uniqueWorkName)
-    }
 }

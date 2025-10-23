@@ -4,25 +4,29 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.work.WorkManager
-//import com.example.appscheduler.ScheduleRepository // optional: your repo to update DB
+import com.example.appscheduler.data.ScheduleRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 
 class CancelScheduleReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val scheduleId = intent?.getStringExtra("scheduleId")
         val packageName = intent?.getStringExtra("packageName")
-
+        val pendingResult = goAsync()
         if (!scheduleId.isNullOrEmpty()) {
-            // Cancel the WorkManager unique work
             val uniqueWorkName = "schedule-$scheduleId"
             WorkManager.getInstance(context).cancelUniqueWork(uniqueWorkName)
 
-            // Optionally update Room DB to mark schedule as CANCELLED
-            // If you have a Repository with synchronous/async API, call it here.
-            // Example (non-blocking):
-            // val repo = ScheduleRepository.getInstance(context)
-            // repo.markCancelled(scheduleId)
+            GlobalScope.launch(Dispatchers.Default) {
+                try {
+                    val repo = ScheduleRepository.getInstance(context)
+                    scheduleId.let { repo.cancelSchedule(it) }
+                } finally {
+                    pendingResult.finish()
+                }
+            }
 
-            // Optionally cancel notification as well (if you used a notif id pattern)
             val notificationId = (scheduleId.hashCode() and 0x7FFFFFFF)
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             nm.cancel(notificationId)
