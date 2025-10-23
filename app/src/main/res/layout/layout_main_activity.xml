@@ -9,18 +9,18 @@
         android:id="@+id/header_title"
         android:layout_width="match_parent"
         android:layout_height="40dp"
-        android:theme="@style/Base.CardView"
         android:layout_marginTop="15dp"
-        android:layout_marginBottom="15dp">
+        android:layout_marginBottom="15dp"
+        android:theme="@style/Base.CardView">
         <TextView
+            style="@style/TextAppearance.AppCompat.Large"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text=" Schedule Installed Apps On This Device"
-            android:textSize="18sp"
-            style="@style/TextAppearance.AppCompat.Large"
-            android:textColor="#444"
+            android:layout_gravity="center"
+            android:fontFamily="sans-serif-medium"
             android:gravity="center"
-            android:layout_gravity="center">
+            android:text=" Schedule Installed Apps On This Device"
+            android:textSize="18sp">
         </TextView>
     </androidx.cardview.widget.CardView>
 
