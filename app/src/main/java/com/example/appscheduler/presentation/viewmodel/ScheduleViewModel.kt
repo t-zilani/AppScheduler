@@ -4,8 +4,8 @@ import WorkManagerHelper
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.appscheduler.data.ConflictException
-import com.example.appscheduler.data.ScheduleRepository
+import com.example.appscheduler.data.repository.ConflictException
+import com.example.appscheduler.data.repository.ScheduleRepository
 import com.example.appscheduler.data.entities.Schedule
 import kotlinx.coroutines.launch
 import java.util.UUID

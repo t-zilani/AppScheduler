@@ -1,4 +1,4 @@
-package com.example.appscheduler.data
+package com.example.appscheduler.data.database
 
 import android.content.Context
 import androidx.room.Database

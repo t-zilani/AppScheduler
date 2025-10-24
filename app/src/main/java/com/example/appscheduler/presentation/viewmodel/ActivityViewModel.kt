@@ -1,29 +1,17 @@
 package com.example.appscheduler.presentation.viewmodel
 
-import android.app.AlarmManager
 import android.app.Application
-import android.app.PendingIntent
-import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.workDataOf
-import com.example.appscheduler.AppLaunchWorker
 import com.example.appscheduler.presentation.model.AppInfo
-import com.example.appscheduler.utils.APLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Calendar
-import java.util.concurrent.TimeUnit
 
 class ActivityViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "ActivityViewModel"

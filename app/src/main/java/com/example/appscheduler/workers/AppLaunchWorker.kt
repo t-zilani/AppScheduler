@@ -1,4 +1,4 @@
-package com.example.appscheduler
+package com.example.appscheduler.workers
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.example.appscheduler.R
 import java.util.*
 
 class AppLaunchWorker(

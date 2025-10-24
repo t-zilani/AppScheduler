@@ -1,8 +1,8 @@
-package com.example.appscheduler
+package com.example.appscheduler.application
 
 import android.app.Application
-import com.example.appscheduler.data.AppDatabase
-import com.example.appscheduler.data.ScheduleRepository
+import com.example.appscheduler.data.database.AppDatabase
+import com.example.appscheduler.data.repository.ScheduleRepository
 
 class App : Application() {
     override fun onCreate() {

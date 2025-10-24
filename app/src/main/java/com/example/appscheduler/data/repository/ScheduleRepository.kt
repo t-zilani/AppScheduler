@@ -1,6 +1,7 @@
-package com.example.appscheduler.data
+package com.example.appscheduler.data.repository
 
 import android.content.Context
+import com.example.appscheduler.data.database.AppDatabase
 import com.example.appscheduler.data.entities.Schedule
 import com.example.appscheduler.utils.APLog
 import kotlinx.coroutines.Dispatchers
