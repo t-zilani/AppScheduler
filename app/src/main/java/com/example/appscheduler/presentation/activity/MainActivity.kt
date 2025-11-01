@@ -1,6 +1,12 @@
 package com.example.appscheduler.presentation.activity
 
+import android.accessibilityservice.AccessibilityService
+import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -10,19 +16,26 @@ import com.example.appscheduler.databinding.LayoutMainActivityBinding
 import com.example.appscheduler.presentation.viewmodel.ActivityViewModel
 import androidx.activity.viewModels
 import android.provider.Settings
+import android.text.TextUtils
+import android.view.accessibility.AccessibilityManager
 import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.appscheduler.data.repository.ScheduleRepository
 import com.example.appscheduler.presentation.adapter.AppListAdapter
 import com.example.appscheduler.presentation.viewmodel.ScheduleViewModel
+import com.example.appscheduler.service.AppLaunchAccessibilityService
 import com.example.appscheduler.utils.APLog
+import com.example.appscheduler.utils.AccessibilityUtils
 
 class MainActivity : AppCompatActivity() {
     private val TAG = "MainActivity"
-    private val REQUEST_NOTIFICATION_PERMISSION = 1001
     private lateinit var binding: LayoutMainActivityBinding
+    private lateinit var adapter: AppListAdapter
+    private lateinit var appsList: MutableList<AppInfo>
     private val appListViewModel: ActivityViewModel by viewModels()
     private val scheduleViewModel: ScheduleViewModel by viewModels()
 
+    private var isAccessibilitySettingsLaunched = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,9 +45,69 @@ class MainActivity : AppCompatActivity() {
         binding = LayoutMainActivityBinding.inflate(layoutInflater)
         val view = binding.root
         setContentView(view)
+        checkAccessibilityPermission()
+    }
 
-        checkNotificationPermission()
+    override fun onStart() {
+        super.onStart()
+        AppLaunchAccessibilityService.onAppExecuted = { packageName ->
+            scheduleViewModel.markScheduleExecutedByPackage(packageName)
+            appsList.find { it.packageName == packageName }?.scheduleId = null
+            appsList.find { it.packageName == packageName }?.scheduledEpochMs = null
+            adapter.updateApps(appsList)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        AppLaunchAccessibilityService.onAppExecuted = null
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        if (AccessibilityUtils.isAccessibilityServiceEnabled(this, AppLaunchAccessibilityService::class.java)) {
+            onAccessibilityEnabled()
+        } else {
+            onAccessibilityDisabled()
+        }
+    }
+
+    private fun checkAccessibilityPermission() {
+        if (!AccessibilityUtils.isAccessibilityServiceEnabled(this, AppLaunchAccessibilityService::class.java)) {
+            showEnableAccessibilityDialog()
+        } else {
+            onAccessibilityEnabled()
+        }
+    }
+
+    private fun showEnableAccessibilityDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Enable Accessibility Service")
+            .setMessage("To allow scheduled apps to launch automatically, please enable App Scheduler in Accessibility -> Installed Apps settings.")
+            .setPositiveButton("Open Settings") { _, _ ->
+                isAccessibilitySettingsLaunched = true
+                AccessibilityUtils.openAccessibilitySettings(this)
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                finishAffinity()
+            }
+            .show()
+    }
+
+    private fun onAccessibilityEnabled() {
+        // You can update your UI here, e.g., show a green indicator
+        // Or show toast
+        Toast.makeText(this, "Accessibility Service is ON", Toast.LENGTH_SHORT).show()
         initAppList()
+    }
+
+    private fun onAccessibilityDisabled() {
+        // Update UI / disable auto-launch features if needed
+        Toast.makeText(this, "Accessibility Service is OFF", Toast.LENGTH_SHORT).show()
+        if(isAccessibilitySettingsLaunched) {
+            finishAffinity()
+        }
     }
 
     private fun initAppList() {
@@ -46,13 +119,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initAdapter(apps: List<AppInfo>) {
-        val appList: MutableList<AppInfo> = apps.toMutableList()
-        APLog.d(TAG, "initAdapter: appList: $appList")
+        appsList = apps.toMutableList()
+        APLog.d(TAG, "initAdapter: appList: $appsList")
 
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
-        val adapter = AppListAdapter(
+        adapter = AppListAdapter(
             context = this@MainActivity,
-            items = appList,
+            items = appsList,
             onScheduleSaved = { appInfo, epochMs, onSaved ->
                 scheduleViewModel.createOrUpdateSchedule(appInfo.appName, appInfo.packageName, epochMs) { success, result ->
                     if (success) {
@@ -67,8 +140,8 @@ class MainActivity : AppCompatActivity() {
             },
 
             onScheduleRemoved = { appInfo ->
-                if (!appInfo.scheduleId.isNullOrBlank()) {
-                    scheduleViewModel.cancelSchedule(appInfo.scheduleId!!)
+                if (appInfo.packageName.isNotBlank()) {
+                    scheduleViewModel.cancelSchedule(appInfo.packageName, appInfo.scheduleId!!)
                 } else {
                     appInfo.scheduledEpochMs = null
                     binding.recyclerView.adapter?.notifyDataSetChanged()
@@ -76,42 +149,29 @@ class MainActivity : AppCompatActivity() {
             }
         )
         binding.recyclerView.adapter = adapter
-    }
 
-    private fun checkNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                requestPermissions(
-                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                    REQUEST_NOTIFICATION_PERMISSION
-                )
+        scheduleViewModel.allSchedules.observe(this) { schedules ->
+            appsList.forEach { app->
+                schedules.forEach { schedule->
+                    if (app.packageName == schedule.packageName) {
+                        if (schedule.scheduledEpochMs < System.currentTimeMillis() || schedule.isExecuted) {
+                            scheduleViewModel.cancelSchedule(schedule.packageName,
+                                app.scheduleId.toString()
+                            )
+                        } else {
+                            app.scheduledEpochMs = schedule.scheduledEpochMs
+                            app.scheduleId = schedule.id
+                        }
+                    }
+                }
             }
+            adapter.updateApps(appsList)
+        }
+
+        // Optional: observe single executed schedule for row update
+        scheduleViewModel.executedSchedule.observe(this) { updatedSchedule ->
+            //adapter.updateRow(updatedSchedule)
         }
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_NOTIFICATION_PERMISSION) {
-            if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Allowed notifications", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Scheduling will not work in background mode, allow notifications from settings", Toast.LENGTH_SHORT).show()
-                openNotificationSettings()
-            }
-        }
-    }
-
-    private fun openNotificationSettings() {
-        val intent = Intent().apply {
-            action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
-            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-        }
-        startActivity(intent)
-    }
 }

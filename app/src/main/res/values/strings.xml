@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">AppScheduler</string>
+    <string name="accessibility_service_description">Accessibility Service Description Here</string>
 </resources>

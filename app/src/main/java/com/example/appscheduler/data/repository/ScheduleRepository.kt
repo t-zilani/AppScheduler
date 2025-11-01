@@ -1,6 +1,7 @@
 package com.example.appscheduler.data.repository
 
 import android.content.Context
+import androidx.lifecycle.LiveData
 import com.example.appscheduler.data.database.AppDatabase
 import com.example.appscheduler.data.entities.Schedule
 import com.example.appscheduler.utils.APLog
@@ -16,6 +17,8 @@ class ScheduleRepository private constructor(
 ) {
     private val scheduleDao = db.scheduleDao()
     private val executionLogDao = db.executionLogDao()
+
+    fun getAllSchedulesLive(): LiveData<List<Schedule>> = scheduleDao.getAllSchedulesLive()
 
     suspend fun createOrUpdateSchedule(
         packageName: String,
@@ -44,7 +47,7 @@ class ScheduleRepository private constructor(
             scheduleDao.update(updated)
             WorkManagerHelper.cancelScheduledWork(context, existing.id)
             WorkManagerHelper.scheduleWithWorkManager(context, existing.id, packageName, scheduledEpochMs)
-            "Updated schedule for ${existing.packageName}"
+            existing.id
         } else {
             val scheduleId = UUID.randomUUID().toString()
             val schedule = Schedule(
@@ -57,14 +60,21 @@ class ScheduleRepository private constructor(
             )
             scheduleDao.insert(schedule)
             WorkManagerHelper.scheduleWithWorkManager(context, scheduleId, packageName, scheduledEpochMs)
-            "Schedule Confirmed For $packageName"
+            scheduleId
         }
     }
 
-    suspend fun cancelSchedule(scheduleId: String) = withContext(Dispatchers.IO) {
-        val s = scheduleDao.getScheduleById(scheduleId) ?: return@withContext
-        val updated = s.copy(status = "CANCELLED")
-        scheduleDao.update(updated)
+    suspend fun getScheduleByPackage(packageName: String) : Schedule {
+        return scheduleDao.getScheduleByPackage(packageName)!!
+    }
+
+    suspend fun updateSchedule(schedule: Schedule): Int {
+        return scheduleDao.update(schedule)
+    }
+
+    suspend fun cancelSchedule(packageName: String, scheduleId: String) = withContext(Dispatchers.IO) {
+        val s = scheduleDao.getScheduleByPackage(packageName)
+        s?.let { scheduleDao.delete(it) }
         WorkManagerHelper.cancelScheduledWork(context, scheduleId)
     }
 

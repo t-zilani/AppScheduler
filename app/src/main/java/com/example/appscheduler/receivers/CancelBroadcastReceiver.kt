@@ -21,7 +21,7 @@ class CancelScheduleReceiver : BroadcastReceiver() {
             GlobalScope.launch(Dispatchers.Default) {
                 try {
                     val repo = ScheduleRepository.getInstance(context)
-                    scheduleId.let { repo.cancelSchedule(it) }
+                    //scheduleId.let { repo.cancelSchedule(it) }
                 } finally {
                     pendingResult.finish()
                 }

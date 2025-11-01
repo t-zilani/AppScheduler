@@ -3,16 +3,42 @@ package com.example.appscheduler.presentation.viewmodel
 import WorkManagerHelper
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.example.appscheduler.data.repository.ConflictException
 import com.example.appscheduler.data.repository.ScheduleRepository
 import com.example.appscheduler.data.entities.Schedule
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.UUID
 
 
 class ScheduleViewModel(application: Application) : AndroidViewModel(application) {
     private val repo = ScheduleRepository.getInstance(application)
+
+    val allSchedules: LiveData<List<Schedule>> = repo.getAllSchedulesLive()
+
+    private val _executedSchedule = MutableLiveData<Schedule>()
+    val executedSchedule: LiveData<Schedule> get() = _executedSchedule
+
+//    fun markScheduleExecuted(schedule: Schedule) {
+//        viewModelScope.launch {
+//            val updatedSchedule = schedule.copy(isExecuted = true)
+//            repo.createOrUpdateSchedule(updatedSchedule.packageName, updatedSchedule.label, updatedSchedule.scheduledEpochMs)
+//            _executedSchedule.postValue(updatedSchedule)
+//        }
+//    }
+
+    fun markScheduleExecutedByPackage(packageName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val schedule = repo.getScheduleByPackage(packageName)
+            schedule.let {
+                repo.updateSchedule(it.copy(isExecuted = true))
+            }
+        }
+    }
+
 
     fun createOrUpdateSchedule(
         appLabel: String,
@@ -33,9 +59,9 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun cancelSchedule(scheduleId: String) {
+    fun cancelSchedule(packageName: String, scheduleId: String) {
         viewModelScope.launch {
-            repo.cancelSchedule(scheduleId)
+            repo.cancelSchedule(packageName, scheduleId)
         }
     }
 

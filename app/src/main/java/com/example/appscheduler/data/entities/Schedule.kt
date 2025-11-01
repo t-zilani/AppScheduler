@@ -11,5 +11,6 @@ data class Schedule(
     val label: String,
     val scheduledEpochMs: Long,
     val createdAtMs: Long,
-    val status: String
+    val status: String,
+    val isExecuted: Boolean = false
 )

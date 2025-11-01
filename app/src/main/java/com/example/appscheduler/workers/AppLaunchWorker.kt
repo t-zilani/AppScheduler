@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.example.appscheduler.R
+import com.example.appscheduler.service.AppLaunchAccessibilityService
 import java.util.*
 
 class AppLaunchWorker(
@@ -51,7 +52,14 @@ class AppLaunchWorker(
             }
         }
 
-        sendFallbackNotification(packageName, scheduleId)
+        val service = AppLaunchAccessibilityService.instance
+        if (service != null) {
+            service.launchAppSilently(packageName)
+            APLog.d(TAG, "Launched app silently through accessibility service")
+        } else {
+            APLog.d(TAG, "Accessibility service not active — cannot launch silently")
+        }
+
         return@withContext Result.success()
     }
 
